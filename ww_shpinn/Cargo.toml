@@ -1,0 +1,12 @@
+[package]
+name    = "ww_shpinn"
+version = "0.1.0"
+edition = "2021"
+description = "Spectral-hypergraph physics-informed regression for wastewater transport (ADR PDE): linear-feature PINN forward solver + hypergraph-regularised inverse source estimation."
+
+[dependencies]
+nalgebra  = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+ww_detection = { path = "../ww_detection" }

@@ -1,0 +1,16 @@
+[package]
+name    = "ww_audit"
+version = "0.1.0"
+edition = "2021"
+description = "Append-only audit log, analyst review workflow, and evidence-chain reporting for wastewater biosurveillance."
+
+[dependencies]
+ww_domain       = { path = "../ww_domain" }
+ontology_engine = { path = "../vendor/ontology_engine" }
+thiserror       = { workspace = true }
+serde           = { workspace = true }
+serde_json      = { workspace = true }
+chrono          = { workspace = true }
+parking_lot     = { workspace = true }
+sha2            = "0.10"
+hex             = "0.4"

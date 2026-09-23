@@ -1,0 +1,12 @@
+[package]
+name    = "ww_domain"
+version = "0.1.0"
+edition = "2021"
+description = "Ontology schema + typed factory/query layer for wastewater biosurveillance."
+
+[dependencies]
+ontology_engine = { path = "../vendor/ontology_engine" }
+thiserror       = { workspace = true }
+chrono          = { workspace = true }
+serde           = { workspace = true }
+serde_json      = { workspace = true }

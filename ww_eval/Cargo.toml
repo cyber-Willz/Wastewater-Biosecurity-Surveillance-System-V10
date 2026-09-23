@@ -1,0 +1,21 @@
+[package]
+name = "ww_eval"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ww_detection = { path = "../ww_detection" }
+csv = "1"
+chrono = "0.4"
+
+[[bin]]
+name = "real_data"
+path = "src/bin/real_data.rs"
+
+[[bin]]
+name = "monte_carlo"
+path = "src/bin/monte_carlo.rs"
+
+[[bin]]
+name = "scotland_e2e"
+path = "src/bin/scotland_e2e.rs"

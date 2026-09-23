@@ -1,0 +1,134 @@
+{
+  "name": "WW Biosec — LIMS Ingest Scheduler",
+  "active": false,
+  "description": "Scheduled workflow: polls a LIMS HTTP endpoint (or S3/SFTP drop) for new wastewater sample results, transforms them into ww_api round payloads, and POSTs them. Disabled by default — activate once LIMS_BASE_URL is configured.",
+  "nodes": [
+    {
+      "name": "Schedule: 06:00 UTC daily",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "cronExpression", "expression": "0 6 * * *" }]
+        }
+      }
+    },
+    {
+      "name": "Fetch LIMS results",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [500, 300],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.LIMS_BASE_URL }}/api/results/today",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpBearerAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "format", "value": "json" },
+            { "name": "analytes", "value": "SARS-CoV-2,Mpox,Vibrio_cholerae" }
+          ]
+        },
+        "options": { "response": { "response": { "responseFormat": "json" } } }
+      }
+    },
+    {
+      "name": "Group by analyte",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [750, 300],
+      "parameters": {
+        "jsCode": "// Input: array of LIMS result objects.\n// Each item: { site_id, analyte, observed_on, log10_conc, n_samples }\n// Output: one item per (analyte, date) pair, shaped as a ww_api RoundRequest.\n\nconst results = $input.all()[0].json;\nconst byKey = {};\n\nfor (const r of results) {\n  const key = `${r.analyte}::${r.observed_on}`;\n  if (!byKey[key]) {\n    byKey[key] = {\n      analyte: r.analyte,\n      observed_on: r.observed_on,\n      observations: [],\n      source: 'lims',\n      actor: 'n8n-lims-ingest'\n    };\n  }\n  byKey[key].observations.push({\n    site_id: r.site_id,\n    log10_conc: r.log10_conc,\n    n_samples: r.n_samples || 1\n  });\n}\n\nreturn Object.values(byKey).map(round => ({ json: round }));"
+      }
+    },
+    {
+      "name": "POST each round",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1000, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.WW_API_BASE_URL }}/v1/rounds",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpBearerAuth",
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={{ JSON.stringify($json) }}",
+        "options": {
+          "response": { "response": { "responseFormat": "json" } },
+          "allowUnauthorizedCerts": false
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "name": "Check for errors",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1250, 300],
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $json.error || ($json.statusCode && $json.statusCode >= 400) }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "true" }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Slack: ingest error",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2,
+      "position": [1500, 200],
+      "parameters": {
+        "operation": "postMessage",
+        "channel": "#biosec-ops",
+        "text": "=:x: *LIMS ingest error* — {{ new Date().toISOString() }}\n\nAnalyte: {{ $json.analyte }}\nError: {{ $json.error || $json.message || JSON.stringify($json) }}\n\nCheck n8n execution logs for details.",
+        "otherOptions": { "mrkdwn": true }
+      }
+    },
+    {
+      "name": "No-op: success",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1500, 400],
+      "parameters": {}
+    }
+  ],
+  "connections": {
+    "Schedule: 06:00 UTC daily": {
+      "main": [[ { "node": "Fetch LIMS results", "type": "main", "index": 0 } ]]
+    },
+    "Fetch LIMS results": {
+      "main": [[ { "node": "Group by analyte", "type": "main", "index": 0 } ]]
+    },
+    "Group by analyte": {
+      "main": [[ { "node": "POST each round", "type": "main", "index": 0 } ]]
+    },
+    "POST each round": {
+      "main": [[ { "node": "Check for errors", "type": "main", "index": 0 } ]]
+    },
+    "Check for errors": {
+      "main": [
+        [ { "node": "Slack: ingest error", "type": "main", "index": 0 } ],
+        [ { "node": "No-op: success",      "type": "main", "index": 0 } ]
+      ]
+    }
+  },
+  "settings": {
+    "saveManualExecutions": true
+  },
+  "_notes": [
+    "Set LIMS_BASE_URL to your LIMS API base URL (e.g. https://lims.bphs.bz).",
+    "Set WW_API_BASE_URL to your ww_api address (e.g. http://ww_api:8080).",
+    "Configure two httpBearerAuth credentials: one for LIMS, one for ww_api (WW_API_TOKEN).",
+    "If LIMS delivers CSV files to an SFTP drop, replace 'Fetch LIMS results' with an SFTP Read node and add a CSV parse step before 'Group by analyte'.",
+    "409 responses from POST /v1/rounds mean a round for that analyte/date already exists — safe to ignore.",
+    "The ww_api round order constraint means this cron must run once per calendar day and not backfill without changing the ingestion order. For late arrivals, implement a replay endpoint (PUT /v1/rounds) or ingest them in a separate catch-up workflow."
+  ]
+}

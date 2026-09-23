@@ -1,0 +1,11 @@
+[package]
+name    = "ww_detection"
+version = "0.1.0"
+edition = "2021"
+description = "EWMA anomaly detector + spectral hypergraph network scorer for wastewater biosurveillance."
+
+[dependencies]
+ww_domain          = { path = "../ww_domain" }
+spectral_hypergraph = { path = "../vendor/spectral_hypergraph" }
+nalgebra           = { workspace = true }
+thiserror          = { workspace = true }

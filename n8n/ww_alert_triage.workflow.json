@@ -1,0 +1,148 @@
+{
+  "name": "WW Biosec — Alert Triage",
+  "active": true,
+  "description": "Receives alert.raised webhooks from ww_api, applies severity-based routing, and calls back /v1/alerts/:id/review.",
+  "nodes": [
+    {
+      "name": "Webhook: alert.raised",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300],
+      "parameters": {
+        "path": "ww-alert-raised",
+        "httpMethod": "POST",
+        "responseMode": "onReceived",
+        "responseCode": 204,
+        "options": {
+          "rawBody": false
+        }
+      }
+    },
+    {
+      "name": "Split alerts",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [500, 300],
+      "parameters": {
+        "fieldToSplitOn": "body.alerts",
+        "options": {}
+      }
+    },
+    {
+      "name": "Route by severity",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [750, 300],
+      "parameters": {
+        "mode": "expression",
+        "output": "={{ $json.severity }}",
+        "rules": {
+          "rules": [
+            { "value": "CRITICAL", "output": 0 },
+            { "value": "RED",      "output": 1 },
+            { "value": "AMBER",    "output": 2 }
+          ]
+        },
+        "fallbackOutput": 2
+      }
+    },
+    {
+      "name": "Escalate CRITICAL",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1000, 150],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.WW_API_BASE_URL }}/v1/alerts/{{ $json.alert_id }}/review",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpBearerAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={\n  \"analyst\": \"n8n-triage-bot\",\n  \"outcome\": \"escalate\",\n  \"notes\": \"Auto-escalated by n8n triage workflow. z={{ $json.z_score }}, spectral={{ $json.spectral_score }}\",\n  \"to_team\": \"BPHS / MOH Rapid Response\"\n}",
+        "options": {}
+      }
+    },
+    {
+      "name": "Escalate RED",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1000, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.WW_API_BASE_URL }}/v1/alerts/{{ $json.alert_id }}/review",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpBearerAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={\n  \"analyst\": \"n8n-triage-bot\",\n  \"outcome\": \"escalate\",\n  \"notes\": \"Auto-escalated RED alert. z={{ $json.z_score }}, spectral={{ $json.spectral_score }}\",\n  \"to_team\": \"Duty Epidemiologist\"\n}",
+        "options": {}
+      }
+    },
+    {
+      "name": "Confirm AMBER",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1000, 450],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.WW_API_BASE_URL }}/v1/alerts/{{ $json.alert_id }}/review",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpBearerAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={\n  \"analyst\": \"n8n-triage-bot\",\n  \"outcome\": \"confirm\",\n  \"notes\": \"AMBER auto-confirmed for monitoring. z={{ $json.z_score }}, spectral={{ $json.spectral_score }}\"\n}",
+        "options": {}
+      }
+    },
+    {
+      "name": "Log error",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [1250, 500],
+      "parameters": {}
+    }
+  ],
+  "connections": {
+    "Webhook: alert.raised": {
+      "main": [[ { "node": "Split alerts", "type": "main", "index": 0 } ]]
+    },
+    "Split alerts": {
+      "main": [[ { "node": "Route by severity", "type": "main", "index": 0 } ]]
+    },
+    "Route by severity": {
+      "main": [
+        [ { "node": "Escalate CRITICAL", "type": "main", "index": 0 } ],
+        [ { "node": "Escalate RED",      "type": "main", "index": 0 } ],
+        [ { "node": "Confirm AMBER",     "type": "main", "index": 0 } ]
+      ]
+    }
+  },
+  "settings": {
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "_notes": [
+    "Set the n8n credential 'httpBearerAuth' to your WW_API_TOKEN value.",
+    "Set the n8n environment variable WW_API_BASE_URL = http://ww_api:8080 (or wherever the API runs).",
+    "The Confirm AMBER branch can be extended with a co-elevation check: if the same site also has a RED/CRITICAL in the same round payload, escalate instead.",
+    "To integrate with the LLM agent (ww_alert_agent), replace the switch+HTTP nodes with an Execute Command node that calls agent_bridge.py."
+  ]
+}

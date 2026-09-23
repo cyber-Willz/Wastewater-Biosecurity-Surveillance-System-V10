@@ -1,0 +1,44 @@
+{
+  "name": "WW Biosec — Network Updated",
+  "active": true,
+  "description": "Receives network.updated webhooks from ww_api (fired after PUT /v1/network). Logs topology changes to Slack #biosec-ops and optionally triggers a baseline recalibration note.",
+  "nodes": [
+    {
+      "name": "Webhook: network.updated",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300],
+      "parameters": {
+        "path": "ww-network-updated",
+        "httpMethod": "POST",
+        "responseMode": "onReceived",
+        "responseCode": 204,
+        "options": {}
+      }
+    },
+    {
+      "name": "Notify ops",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2,
+      "position": [550, 300],
+      "parameters": {
+        "operation": "postMessage",
+        "channel": "#biosec-ops",
+        "text": "=:map: *Sewer network topology updated* — {{ new Date().toISOString() }}\n\n*Sites:* {{ $json.body.network.sites }} | *Catchments:* {{ $json.body.network.catchments }}\n*Added:* {{ $json.body.network.sites_added }} | *Removed:* {{ $json.body.network.sites_removed }}\n*Fiedler value:* {{ $json.body.network.fiedler_value?.toFixed(6) ?? 'N/A' }}\n*Spread threshold (null q95):* {{ $json.body.network.spread_threshold?.toFixed(6) ?? 'N/A' }}\n\n:warning: EWMA baselines have been rebuilt from observation history. Verify next round scores are reasonable.",
+        "otherOptions": { "mrkdwn": true }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook: network.updated": {
+      "main": [[ { "node": "Notify ops", "type": "main", "index": 0 } ]]
+    }
+  },
+  "settings": {
+    "saveManualExecutions": true
+  },
+  "_notes": [
+    "This workflow is intentionally minimal. Topology changes should be rare and deliberate.",
+    "The Fiedler value drop is a useful signal: a value near 0 means the hypergraph is close to disconnected, which degrades spectral detection."
+  ]
+}

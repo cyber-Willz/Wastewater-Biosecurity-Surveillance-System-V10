@@ -1,0 +1,106 @@
+# docker-compose.n8n.yml
+#
+# Overlay for the ww_biosec stack that adds n8n as a workflow engine.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.n8n.yml up -d
+#
+# Prerequisites: a base docker-compose.yml that defines the `ww_api` and
+# `postgres` services. If you don't have one yet, the service stubs below
+# include enough to get started; adapt connection strings to match yours.
+
+version: "3.9"
+
+services:
+
+  # ── n8n ────────────────────────────────────────────────────────────────────
+  n8n:
+    image: n8nio/n8n:latest
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      # n8n internal storage
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=${N8N_ADMIN_USER:-admin}
+      - N8N_BASIC_AUTH_PASSWORD=${N8N_ADMIN_PASSWORD:?set N8N_ADMIN_PASSWORD}
+
+      # Postgres for n8n workflow/execution persistence (separate DB from ww_biosec)
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=postgres
+      - DB_POSTGRESDB_PORT=5432
+      - DB_POSTGRESDB_DATABASE=${N8N_PG_DB:-n8n}
+      - DB_POSTGRESDB_USER=${N8N_PG_USER:-n8n}
+      - DB_POSTGRESDB_PASSWORD=${N8N_PG_PASSWORD:?set N8N_PG_PASSWORD}
+
+      # Expose the ww_api address to workflow nodes via env
+      - WW_API_BASE_URL=http://ww_api:8080
+      - WW_DASHBOARD_URL=${WW_DASHBOARD_URL:-http://grafana:3000}
+      - GRAFANA_URL=${GRAFANA_URL:-http://grafana:3000}
+      - LIMS_BASE_URL=${LIMS_BASE_URL:-}   # optional; enables the LIMS ingest workflow
+
+      # Webhook base URL (used by n8n for test executions)
+      - WEBHOOK_URL=http://n8n:5678/
+
+      # Execution settings
+      - EXECUTIONS_DATA_SAVE_ON_ERROR=all
+      - EXECUTIONS_DATA_SAVE_ON_SUCCESS=none   # saves disk; set to 'all' for debugging
+      - EXECUTIONS_DATA_SAVE_MANUAL_EXECUTIONS=true
+      - EXECUTIONS_DATA_PRUNE=true
+      - EXECUTIONS_DATA_MAX_AGE=168            # hours (7 days)
+
+      # Timezone for cron triggers
+      - GENERIC_TIMEZONE=${TZ:-UTC}
+
+    volumes:
+      - n8n_data:/home/node/.n8n
+      # Mount workflow JSONs for import on first run (see entrypoint note below)
+      - ./n8n:/n8n-workflows:ro
+
+    networks:
+      - ww_internal
+
+    depends_on:
+      - postgres
+
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:5678/healthz || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ── ww_api — add webhook env vars to the existing service ──────────────────
+  # If you already have a ww_api service definition, merge the `environment`
+  # block below into it. These vars activate the outbound dispatcher.
+  ww_api:
+    environment:
+      - WW_N8N_BASE_URL=http://n8n:5678
+      # Paths must match the webhook path fields in the workflow JSONs:
+      - WW_N8N_ALERT_PATH=/webhook/ww-alert-raised
+      - WW_N8N_REVIEW_PATH=/webhook/ww-alert-reviewed
+      - WW_N8N_ROUND_PATH=/webhook/ww-round-ingested
+      - WW_N8N_NETWORK_PATH=/webhook/ww-network-updated
+      # Optional: a shared secret n8n will verify on incoming requests
+      # (requires the n8n Webhook node to be set to "Header Auth" and this
+      #  token placed in the n8n credential store)
+      - WW_N8N_TOKEN=${WW_N8N_TOKEN:-}
+      - WW_N8N_TIMEOUT_MS=3000
+      - WW_N8N_RETRY=2
+
+volumes:
+  n8n_data:
+
+networks:
+  ww_internal:
+    external: true   # assumed shared with ww_api and postgres
+
+# ── First-run workflow import ─────────────────────────────────────────────────
+# n8n does not auto-import JSON files on startup. To import all four workflows:
+#
+#   docker compose exec n8n n8n import:workflow --separate --input=/n8n-workflows
+#
+# Run this once after the stack is up. Workflows import as inactive; activate
+# them in the n8n UI after configuring credentials:
+#   • httpBearerAuth "ww_api"  → value: $WW_API_TOKEN
+#   • Slack OAuth2             → your workspace app
+#   • httpBasicAuth "grafana"  → Grafana service account token (as password, user = "api")

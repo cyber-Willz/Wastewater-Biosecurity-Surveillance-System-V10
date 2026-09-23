@@ -1,0 +1,69 @@
+[package]
+name        = "ww_api"
+version     = "0.1.0"
+edition     = "2021"
+default-run = "ww_api"
+description = "Axum REST service + PostgreSQL persistence for the ww_biosec surveillance pipeline."
+
+[lib]
+name = "ww_api"
+path = "src/lib.rs"
+
+[[bin]]
+name = "ww_api"
+path = "src/main.rs"
+
+[[bin]]
+name = "scotland_live"
+path = "src/bin/scotland_live.rs"
+
+[dependencies]
+ww_domain    = { path = "../ww_domain" }
+ww_detection = { path = "../ww_detection" }
+
+axum              = "0.7"
+tokio             = { version = "1", features = ["rt-multi-thread", "macros", "net", "signal", "sync", "time"] }
+tokio-postgres    = { version = "0.7", features = ["with-chrono-0_4", "with-serde_json-1"] }
+deadpool-postgres = "0.14"
+
+# ── SeaORM (sqlx-postgres backend, shares libpq linkage with tokio-postgres) ──
+# tokio-postgres/deadpool-postgres remain the driver for the hot-path,
+# PostgreSQL-specific operations (advisory locks, UNNEST bulk inserts,
+# nextval). SeaORM sits alongside them as the typed entity/query layer used
+# by the /v1/orm/* routes and available for future read/write paths.
+sqlx = { version = "0.7", default-features = false, features = [
+    "runtime-tokio-rustls",
+    "postgres",
+    "chrono",
+    "json",
+] }
+sea-orm = { version = "0.12", default-features = false, features = [
+    "sqlx-postgres",
+    "runtime-tokio-rustls",
+    "macros",
+    "with-chrono",
+    "with-json",
+] }
+
+serde      = { workspace = true }
+serde_json = { workspace = true, features = ["float_roundtrip"] }
+chrono     = { workspace = true }
+thiserror  = { workspace = true }
+
+tracing            = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+csv     = "1"
+sha2    = { workspace = true }
+hex     = { workspace = true }
+
+# ── Build notes ────────────────────────────────────────────────────────────
+# Requires a current Rust toolchain (rustc >= 1.85 / a rustup-managed
+# `stable`), since the crates.io registry now serves crate releases across
+# this dependency graph (crypto-common, cpufeatures, time-core, getrandom,
+# deadpool-runtime, and others) that declare `edition = "2024"`. An old
+# distro-packaged rustc (e.g. Ubuntu 24.04's apt `rustc` 1.75) cannot parse
+# those manifests during dependency resolution and dependency pinning to
+# work around it is not something you want to maintain long-term — just use
+# `rustup update stable` first.

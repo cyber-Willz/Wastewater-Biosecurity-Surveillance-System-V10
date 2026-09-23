@@ -1,0 +1,85 @@
+{
+  "name": "WW Biosec — Round Ingested",
+  "active": true,
+  "description": "Receives round.ingested webhooks. Tracks daily alert counts; when a round closes a day (last analyte round of the day), fires a daily digest to Slack. Also triggers a Grafana dashboard refresh.",
+  "nodes": [
+    {
+      "name": "Webhook: round.ingested",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300],
+      "parameters": {
+        "path": "ww-round-ingested",
+        "httpMethod": "POST",
+        "responseMode": "onReceived",
+        "responseCode": 204,
+        "options": {}
+      }
+    },
+    {
+      "name": "Check alerts in round",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [500, 300],
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $json.body.round.alerts.length }}",
+              "rightValue": 0,
+              "operator": { "type": "number", "operation": "gt" }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Post round summary",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2,
+      "position": [800, 200],
+      "parameters": {
+        "operation": "postMessage",
+        "channel": "#biosec-monitoring",
+        "text": "=:droplet: *Round ingested with alerts* — {{ $json.body.round.analyte }} @ {{ $json.body.round.observed_on }}\n\n*Alerts:* {{ $json.body.round.alerts.length }} | *Sites:* {{ $json.body.round.n_observations }} | *Spectral score:* {{ $json.body.round.spectral_score.toFixed(4) }}\n\n{{ $json.body.round.alerts.map(a => `• ${a.site_id} — ${a.severity} (z={{ a.z_score.toFixed(2) }})`).join('\\n') }}",
+        "otherOptions": { "mrkdwn": true }
+      }
+    },
+    {
+      "name": "Refresh Grafana dashboard",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [800, 400],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.GRAFANA_URL }}/api/annotations",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpBasicAuth",
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={\n  \"dashboardUID\": \"ww-biosec-main\",\n  \"time\": {{ Date.now() }},\n  \"tags\": [\"round\", \"{{ $json.body.round.analyte }}\"],\n  \"text\": \"Round ingested: {{ $json.body.round.analyte }} {{ $json.body.round.observed_on }} — {{ $json.body.round.n_alerts }} alert(s)\"\n}",
+        "options": {}
+      },
+      "continueOnFail": true
+    }
+  ],
+  "connections": {
+    "Webhook: round.ingested": {
+      "main": [[ { "node": "Check alerts in round", "type": "main", "index": 0 } ]]
+    },
+    "Check alerts in round": {
+      "main": [
+        [ { "node": "Post round summary",       "type": "main", "index": 0 } ],
+        [ { "node": "Refresh Grafana dashboard", "type": "main", "index": 0 } ]
+      ]
+    }
+  },
+  "settings": {
+    "saveManualExecutions": true
+  },
+  "_notes": [
+    "Set GRAFANA_URL env var and a Grafana Basic Auth credential for the annotation node.",
+    "The Grafana node uses continueOnFail=true so a missing Grafana instance doesn't block the Slack post.",
+    "Extend the false branch (no alerts) to also post the Grafana annotation so dashboards refresh on every round, not only alerted ones."
+  ]
+}

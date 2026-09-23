@@ -1,0 +1,13 @@
+[package]
+name        = "ww_alert_agent"
+version     = "0.1.0"
+edition     = "2021"
+description = "Agentic AI alert agent: calls the Anthropic API via curl subprocess to triage detected anomalies before human analyst review."
+
+[dependencies]
+ww_domain   = { path = "../ww_domain" }
+ww_audit    = { path = "../ww_audit" }
+thiserror   = { workspace = true }
+serde       = { workspace = true }
+serde_json  = { workspace = true }
+chrono      = { workspace = true }

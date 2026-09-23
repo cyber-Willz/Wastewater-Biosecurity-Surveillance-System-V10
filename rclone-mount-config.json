@@ -1,0 +1,63 @@
+{
+  "mounts": [
+    {
+      "cache_duration_s": 3600.0,
+      "destination": "/mnt/user-data/outputs",
+      "dir_perms": "0755",
+      "file_perms": "0644",
+      "filesystem_id": "claude_chat_01B9mHBs15KSbQDaGvc1YYAx",
+      "gid": 1000,
+      "readonly": false,
+      "service_url": "https://api.anthropic.com",
+      "source": "/outputs",
+      "uid": 999,
+      "vfs_cache_max_size": "1G",
+      "vfs_cache_mode": "full"
+    },
+    {
+      "cache_duration_s": 1.0,
+      "destination": "/mnt/user-data/uploads",
+      "dir_perms": "0755",
+      "file_perms": "0644",
+      "filesystem_id": "claude_chat_01B9mHBs15KSbQDaGvc1YYAx",
+      "gid": 1000,
+      "readonly": true,
+      "service_url": "https://api.anthropic.com",
+      "source": "/uploads",
+      "uid": 999,
+      "vfs_cache_max_size": "1G",
+      "vfs_cache_mode": "full"
+    },
+    {
+      "cache_duration_s": 10.0,
+      "destination": "/mnt/transcripts",
+      "dir_perms": "0755",
+      "file_perms": "0644",
+      "filesystem_id": "claude_chat_01B9mHBs15KSbQDaGvc1YYAx",
+      "gid": 1000,
+      "readonly": true,
+      "service_url": "https://api.anthropic.com",
+      "source": "/transcripts",
+      "uid": 999,
+      "vfs_cache_max_size": "1G",
+      "vfs_cache_mode": "full"
+    },
+    {
+      "cache_duration_s": 3.0,
+      "destination": "/mnt/user-data/tool_results",
+      "dir_perms": "0755",
+      "file_perms": "0644",
+      "filesystem_id": "claude_chat_01B9mHBs15KSbQDaGvc1YYAx",
+      "gid": 1000,
+      "readonly": true,
+      "service_url": "https://api.anthropic.com",
+      "source": "/tool_results",
+      "uid": 999,
+      "vfs_cache_max_size": "1G",
+      "vfs_cache_mode": "full"
+    }
+  ],
+  "ready_file": "/tmp/rclone-mounts/ready",
+  "service_url": "https://api.anthropic.com",
+  "state_dir": "/tmp/rclone-mounts"
+}

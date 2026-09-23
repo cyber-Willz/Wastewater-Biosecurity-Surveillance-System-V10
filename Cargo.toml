@@ -1,0 +1,20 @@
+[workspace]
+members  = ["ww_domain", "ww_detection", "ww_audit", "ww_alert_agent", "ww_shpinn", "ww_runner", "ww_eval", "ww_api"]
+resolver = "2"
+
+# Shared dependency versions across the workspace.
+[workspace.dependencies]
+thiserror    = "1.0"
+serde        = { version = "1.0", features = ["derive"] }
+serde_json   = "1.0"
+parking_lot  = "0.12"
+chrono       = { version = "0.4", features = ["serde"] }
+nalgebra     = { version = "0.32", default-features = false, features = ["std", "matrixmultiply"] }
+sha2         = "0.10"
+hex          = "0.4"
+
+[profile.release]
+opt-level       = 3
+lto             = "thin"
+codegen-units   = 1
+panic           = "abort"

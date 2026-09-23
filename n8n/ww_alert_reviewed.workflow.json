@@ -1,0 +1,93 @@
+{
+  "name": "WW Biosec — Alert Reviewed Notification",
+  "active": true,
+  "description": "Receives alert.reviewed webhooks from ww_api and routes notifications: escalations to Slack #biosec-escalations, confirmations to Slack #biosec-monitoring, dismissals are silently logged.",
+  "nodes": [
+    {
+      "name": "Webhook: alert.reviewed",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300],
+      "parameters": {
+        "path": "ww-alert-reviewed",
+        "httpMethod": "POST",
+        "responseMode": "onReceived",
+        "responseCode": 204,
+        "options": {}
+      }
+    },
+    {
+      "name": "Route by outcome",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [500, 300],
+      "parameters": {
+        "mode": "expression",
+        "output": "={{ $json.body.outcome }}",
+        "rules": {
+          "rules": [
+            { "value": "ESCALATED", "output": 0 },
+            { "value": "CONFIRMED", "output": 1 },
+            { "value": "DISMISSED", "output": 2 }
+          ]
+        },
+        "fallbackOutput": 2
+      }
+    },
+    {
+      "name": "Slack: escalation",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2,
+      "position": [800, 150],
+      "parameters": {
+        "operation": "postMessage",
+        "channel": "#biosec-escalations",
+        "text": "=:rotating_light: *ESCALATED ALERT* :rotating_light:\n\n*Alert ID:* {{ $json.body.alert.alert_id }}\n*Site:* {{ $json.body.alert.site_id }}\n*Analyte:* {{ $json.body.alert.analyte }}\n*Severity:* {{ $json.body.alert.severity }}\n*z-score:* {{ $json.body.alert.z_score }}\n*Analyst:* {{ $json.body.analyst }}\n*Notes:* {{ $json.body.alert.analyst_notes }}\n\n<{{ $env.WW_DASHBOARD_URL }}/alerts/{{ $json.body.alert.alert_id }}|View evidence chain →>",
+        "otherOptions": {
+          "mrkdwn": true
+        }
+      }
+    },
+    {
+      "name": "Slack: confirmed",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2,
+      "position": [800, 300],
+      "parameters": {
+        "operation": "postMessage",
+        "channel": "#biosec-monitoring",
+        "text": "=:yellow_circle: *Alert confirmed for monitoring*\n\n*Alert ID:* {{ $json.body.alert.alert_id }} | *Site:* {{ $json.body.alert.site_id }} | *Analyte:* {{ $json.body.alert.analyte }} ({{ $json.body.alert.severity }})\n*z-score:* {{ $json.body.alert.z_score }} | *Analyst:* {{ $json.body.analyst }}\n*Notes:* {{ $json.body.alert.analyst_notes }}",
+        "otherOptions": {
+          "mrkdwn": true
+        }
+      }
+    },
+    {
+      "name": "Log dismissed",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [800, 450],
+      "parameters": {}
+    }
+  ],
+  "connections": {
+    "Webhook: alert.reviewed": {
+      "main": [[ { "node": "Route by outcome", "type": "main", "index": 0 } ]]
+    },
+    "Route by outcome": {
+      "main": [
+        [ { "node": "Slack: escalation", "type": "main", "index": 0 } ],
+        [ { "node": "Slack: confirmed",  "type": "main", "index": 0 } ],
+        [ { "node": "Log dismissed",     "type": "main", "index": 0 } ]
+      ]
+    }
+  },
+  "settings": {
+    "saveManualExecutions": true
+  },
+  "_notes": [
+    "Configure a Slack credential in n8n and set its name in the Slack nodes.",
+    "Set WW_DASHBOARD_URL env var (e.g. http://grafana:3000) for deep-link evidence chain URLs.",
+    "Swap the Slack nodes for Email (n8n-nodes-base.emailSend) or PagerDuty nodes for on-call escalation."
+  ]
+}

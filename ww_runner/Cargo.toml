@@ -1,0 +1,18 @@
+[package]
+name    = "ww_runner"
+version = "0.1.0"
+edition = "2021"
+description = "Simulation runner and CLI entry point for the wastewater biosurveillance system."
+
+[[bin]]
+name = "ww_biosec"
+path = "src/main.rs"
+
+[dependencies]
+ww_domain       = { path = "../ww_domain" }
+ww_detection    = { path = "../ww_detection" }
+ww_audit        = { path = "../ww_audit" }
+ww_alert_agent  = { path = "../ww_alert_agent" }
+ww_shpinn       = { path = "../ww_shpinn" }
+ontology_engine = { path = "../vendor/ontology_engine" }
+chrono          = { workspace = true }

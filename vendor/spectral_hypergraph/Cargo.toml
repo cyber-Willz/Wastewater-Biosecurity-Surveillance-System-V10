@@ -1,0 +1,48 @@
+[package]
+name = "spectral_hypergraph"
+version = "0.1.0"
+edition = "2021"
+description = "Production-ready spectral hypergraph data structure built on a bipartite graph representation, with sparse Laplacian construction and spectral analysis (Fiedler vectors, spectral clustering, eigen-decomposition)."
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+keywords = ["hypergraph", "spectral", "graph", "laplacian", "clustering"]
+categories = ["algorithms", "data-structures", "science"]
+
+[dependencies]
+petgraph = { version = "0.6", default-features = false, features = ["stable_graph"] }
+nalgebra = { version = "0.32", default-features = false, features = ["std", "matrixmultiply"] }
+thiserror = "1.0"
+rand = "0.8"
+rand_chacha = "0.3"
+serde = { version = "1.0", features = ["derive"], optional = true }
+rayon = { version = "1.10", optional = true }
+sprs = { version = "0.11", default-features = false, optional = true }
+
+indexmap = "=2.2.6"
+
+[dev-dependencies]
+approx = "0.5"
+serde_json = "1.0"
+
+[features]
+default = []
+# Serde (de)serialization of hypergraphs (see `serde_support`) via a stable,
+# hand-written schema -- not a derive on the internal petgraph structure.
+serde-support = ["serde"]
+# Parallel Lanczos matvecs (`laplacian::HypergraphOperator::apply`) via rayon.
+# Only pays off once hyperedge cardinalities/vertex degrees are large enough
+# that per-vertex/per-hyperedge work outweighs thread dispatch overhead; see
+# `laplacian` module docs.
+parallel = ["rayon"]
+# CSR/CSC export as an actual `sprs::CsMat<f64>` (see `sparse`), for interop
+# with the wider Rust sparse linear algebra ecosystem. Without this feature
+# `sparse` still exports a dependency-free CSR struct.
+sprs-interop = ["sprs"]
+
+[lib]
+name = "spectral_hypergraph"
+path = "src/lib.rs"
+
+[profile.release]
+opt-level = 3
+lto = true
